@@ -6,7 +6,7 @@
 # ==============================================================================
 
 # Comment the following line to stop debugging this script
- set -o xtrace
+set -o xtrace
 # Comment the following like to stop script on failure (Fail fast)
 # set -e
 
@@ -22,23 +22,19 @@ source common_functions
 
 # ======================= Processes installation options =====================
 while [[ ${1} ]]; do
-  case "${1}" in
-    --password|-p)
-      if [[ -z "${2}" || "${2}" == -* ]]; then
-          PrintError "Missing password."
-      else
-          _PASSWORD="${2}"
-      fi
-      shift
-      ;;
-    --help|-h)
-      PrintHelp "Install refstack server " $(basename "$0") "     --password | -p   Password to be used on the DB."
-      ;;
-    *)
-      HandleOptions "$@"
-      shift
-  esac
-  shift
+    case "${1}" in
+        --password|-p)
+            [[ -z "${2}" || "${2}" == -* ]] && PrintError "Missing password." || _PASSWORD="${2}"
+            shift
+            ;;
+        --help|-h)
+            PrintHelp "Install refstack server " $(basename "$0") "     --password | -p   Password to be used on the DB."
+            ;;
+        *)
+            HandleOptions "$@"
+            shift
+    esac
+    shift
 done
 
 # ==================================== Install Dependencies ===================
@@ -107,10 +103,10 @@ sed -i "s/refstack.openstack.org\/api/$fqdn:8000/g" refstack-ui/app/config.json
 # DB SYNC IF VERSION IS None
 source .venv/bin/activate
 if [[ ! -z $(refstack-manage --config-file etc/refstack.conf version | grep -i none) ]];then
-  refstack-manage --config-file etc/refstack.conf upgrade --revision head
-  # Verify upgrade actually happened
-  msg="After sync DB, version is still displayed as None."
-  [[ ! -z $(refstack-manage --config-file etc/refstack.conf version | grep -i none) ]] && PrintError $msg
+    refstack-manage --config-file etc/refstack.conf upgrade --revision head
+    # Verify upgrade actually happened
+    msg="After sync DB, version is still displayed as None."
+    [[ ! -z $(refstack-manage --config-file etc/refstack.conf version | grep -i none) ]] && PrintError $msg
 fi
 popd
 
