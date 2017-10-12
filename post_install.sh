@@ -6,7 +6,7 @@
 # ==============================================================================
 
 # Comment the following line to stop debugging this script
-# set -o xtrace
+ set -o xtrace
 # Comment the following like to stop script on failure (Fail fast)
 # set -e
 
@@ -54,7 +54,7 @@ umask 022
 [[ -n $_PROXY ]] && source ".PROXY"
 
 [[ ! -f install_devtools.sh ]] && wget https://raw.githubusercontent.com/dlux/InstallScripts/master/install_devtools.sh
-
+chmod +x install_devtools.sh
 [[ -z "${_ORIGINAL_PROXY}" ]] && ./install_devtools.sh || ./install_devtools.sh -x $_ORIGINAL_PROXY
 
 apt-get install -y python-setuptools python-mysqldb

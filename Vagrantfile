@@ -14,8 +14,8 @@ Vagrant.configure(2) do |config|
 
   config.vm.network :forwarded_port, guest: 8000, host: 8880
 
-  config.vm.synced_folder './shared/', '/home/ubuntu/shared'
-  config.vm.synced_folder './opt_refstack', '/opt/refstack'
+  config.vm.synced_folder './shared/', '/home/ubuntu/shared', create: true
+  config.vm.synced_folder './opt_refstack', '/opt', create: true
 
   if ENV['http_proxy'] != nil and ENV['https_proxy'] != nil and ENV['no_proxy'] != nil 
     if not Vagrant.has_plugin?('vagrant-proxyconf')
