@@ -108,11 +108,17 @@ if [[ ! -z $(refstack-manage --config-file etc/refstack.conf version | grep -i n
     msg="After sync DB, version is still displayed as None."
     [[ ! -z $(refstack-manage --config-file etc/refstack.conf version | grep -i none) ]] && PrintError $msg
 fi
-popd
 
-echo "Starting Refstack Server. Run next daemon on screen session."
+echo "Generate HTML templates from docs"
+sudo -HE -u $caller_user bash -c "source .venv/bin/activate; python tools/convert-docs.py -o refstack-ui/app/components/about/templates doc/source/*.rst"
+
+echo "Starting Refstack Server. Run daemon on refstack-svr screen session."
 echo "refstack-api --env REFSTACK_OSLO_CONFIG=etc/refstack.conf"
-echo "Finished Installation Script"
+
+# Run on deatached screen session
+sudo -HE -u $caller_user bash -c "screen -dmS refstack-svr bash -c 'source .venv/bin/activate; refstack-api --env REFSTACK_OSLO_CONFIG=etc/refstack.conf;'"
 
 # Cleanup _proxy from apt if added - first coincedence
 UnsetProxy $_ORIGINAL_PROXY
+popd
+echo "Finished Installation Script"

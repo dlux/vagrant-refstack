@@ -12,7 +12,7 @@ Vagrant.configure(2) do |config|
   config.vm.hostname = 'refstack'
   config.vm.network :private_network, ip: '192.168.10.10'
 
-  config.vm.network :forwarded_port, guest: 8000, host: 8880
+  config.vm.network :forwarded_port, guest: 8000, host: 8000
 
   config.vm.synced_folder './shared/', '/home/ubuntu/shared', create: true
   config.vm.synced_folder './opt_refstack', '/opt', create: true

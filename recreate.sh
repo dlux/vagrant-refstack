@@ -1,3 +1,5 @@
 #!/bin/bash
 
-vagrant destroy -f && vagrant up
+./cleanup.sh
+
+./init.sh
