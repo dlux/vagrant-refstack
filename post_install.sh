@@ -58,7 +58,7 @@ debconf-set-selections <<< "mysql-server mysql-server/root_password password ${_
 debconf-set-selections <<< "mysql-server mysql-server/root_password_again password ${_PASSWORD}"
 apt-get install -q -y mysql-server
 
-curl -sL https://deb.nodesource.com/setup_4.x | bash -
+curl -sL https://deb.nodesource.com/setup_8.x | bash -
 apt-get install -y nodejs
 # ======================================= Setup Database ======================
 mysql -uroot -p"${_PASSWORD}" <<MYSQL_SCRIPT
