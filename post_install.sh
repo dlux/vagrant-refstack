@@ -17,6 +17,14 @@ _PASSWORD='secure123'
 _DEST_PATH='/opt/refstack'
 _DREPO='https://raw.githubusercontent.com/dlux/InstallScripts/master'
 _OREPO='http://git.openstack.org/openstack'
+_PROTOCOL='http'
+_VIRTUAL_ENV=False
+
+_CALLER_USER=$(who -m | awk '{print $1;}')
+_CALLER_USER=${_CALLER_USER:-'ubuntu'}
+#_FQDN="$(hostname)"
+#[[ -n "$(hostname -d)" ]] && _FQDN="${_FQDN}.$(hostname -d)"
+_FQDN=localhost
 
 [[ ! -f common_functions ]] && curl -O "${_DREPO}"/common_functions
 [[ ! -f common_packages ]] && curl -O "${_DREPO}"/common_packages
@@ -30,9 +38,16 @@ while [[ ${1} ]]; do
             [[ -z "${2}" || "${2}" == -* ]] && PrintError "Missing password." || _PASSWORD="${2}"
             shift
             ;;
+        --ssl|-s)
+            _PROTOCOL='https'
+            ;;
+        --virtual|-v)
+            _VIRTUAL_ENV=True
+            ;;
         --help|-h)
             PrintHelp "Install refstack server " $(basename "$0") \
-                      "     --password | -p   Password to be used on the DB."
+                      "     --password | -p   Password to be used on the DB.
+     --virtual  | -v   Refstack server will be installed on a venv vs system wide."
             ;;
         *)
             HandleOptions "$@"
@@ -53,13 +68,14 @@ umask 022
 [[ -n $_PROXY ]] && source ".PROXY"
 
 [[ ! -f install_devtools.sh ]] && curl -O ${_DREPO}/install_devtools.sh; chmod +x install_devtools.sh;
-[[ -z "${_ORIGINAL_PROXY}" ]] && ./install_devtools.sh || ./install_devtools.sh -x $_ORIGINAL_PROXY
-
-InstallMysql "${_PASSWORD}"
+[[ -z _ORIGINAL_PROXY ]] && ./install_devtools.sh || ./install_devtools.sh -x $_ORIGINAL_PROXY
 
 InstallNodejs '8'
 
-# ====================================== Setup Database ======================
+# ================================== Setup Database ==========================
+InstallMysql "${_PASSWORD}"
+HardeningaptMysql "${_PASSWORD}"
+
 mysql -uroot -p"${_PASSWORD}" <<MYSQL_SCRIPT
 CREATE DATABASE refstack;
 CREATE USER 'refstack'@'localhost' IDENTIFIED BY '$_PASSWORD';
@@ -68,57 +84,66 @@ FLUSH PRIVILEGES;
 
 MYSQL_SCRIPT
 
-# ====================================== Setup Refstack ======================
-caller_user=$(who -m | awk '{print $1;}')
-caller_user=${caller_user:-'ubuntu'}
-fqdn="$(hostname)"
-[[ -n "$(hostname -d)" ]] && fqdn="${fqdn}.$(hostname -d)"
-#fqdn='localhost'
-
-# Install refstack client - Shorter task
+# ================================== Install Refstack Client =================
 echo "INSTALLING REFSTACK CLIENT"
 REF_CLIENT="${_DEST_PATH}-client"
 [[ ! -d "$REF_CLIENT" ]] && git clone ${_OREPO}/refstack-client $REF_CLIENT
-chown -R $caller_user $REF_CLIENT
 pushd $REF_CLIENT
-sudo -HE -u $caller_user bash -c "./setup_env"
+./setup_env -p3
+chown -R $_CALLER_USER $REF_CLIENT
 popd
 
-echo "INSTALLING REFSTACK SERVER, API AND UI"
+# ================================== Install Refstack ========================
+echo "INSTALLING REFSTACK SERVER: API AND UI"
 [[ ! -d "$_DEST_PATH" ]] && git clone ${_OREPO}/refstack $_DEST_PATH
-chown -R $caller_user $_DEST_PATH
 pushd $_DEST_PATH
-sudo -HE -u $caller_user bash -c 'virtualenv .venv --system-site-package; source .venv/bin/activate; pip install .; pip install pymysql; pip install gunicorn;'
-sudo -HE -u $caller_user bash -c 'npm install'
 
-CFG_FILE='etc/refstack.conf'
-sudo -HE -u $caller_user bash -c "cp etc/refstack.conf.sample $CFG_FILE"
-sed -i "s/#connection = <None>/connection = mysql+pymysql\:\/\/refstack\:$_PASSWORD\@localhost\/refstack/g" $CFG_FILE
-sed -i "/ui_url/a ui_url = http://$fqdn:8000" $CFG_FILE
-sed -i "/api_url/a api_url = http://$fqdn:8000" $CFG_FILE
-sed -i "/app_dev_mode/a app_dev_mode = true" $CFG_FILE
-sed -i "/debug = false/a debug = true" $CFG_FILE
+pip install ./ pymysql
 
-CFG_FILE='refstack-ui/app/config.json'
-sudo -HE -u $caller_user bash -c "cp ${CFG_FILE}.sample ${CFG_FILE}"
-sed -i "s/refstack.openstack.org/$fqdn:8000/g" ${CFG_FILE}
+[[ $_PROTOCOL -eq 'http' ]] && pip install gunicorn
 
-# DB SYNC IF VERSION IS None
-source .venv/bin/activate
-if [[ ! -z $(refstack-manage --config-file $CFG_FILE version | grep -i none) ]]; then
-    refstack-manage --config-file $CFG_FILE upgrade --revision head
+npm install
+
+sudo -HE -u $_CALLER_USER bash -c 'npm install'
+
+# Handle UI configuration
+echo "{\"refstackApiUrl\": \"${_PROTOCOL}://${_FQDN}:8000/v1\"}" > 'refstack-ui/app/config.json'
+
+# Handle API configuration
+cfg_file='etc/refstack.conf'
+cat <<EOF > "${cfg_file}"
+[DEFAULT]
+debug = True
+verbose = True
+ui_url = ${_PROTOCOL}://${_FQDN}:8000
+
+[api]
+api_url = ${_PROTOCOL}://${_FQDN}:8000
+app_dev_mode = True
+
+[database]
+connection = mysql+pymysql://refstack:${_PASSWORD}@localhost/refstack
+
+[osid]
+#openstack_openid_endpoint = https://172.17.42.1:8443/accounts/openid2
+
+EOF
+
+# DB SYNC
+if [[ ! -z $(refstack-manage --config-file $cfg_file version | grep -i none) ]]; then
+    refstack-manage --config-file $cfg_file upgrade --revision head
     # Verify upgrade actually happened
     msg="After sync DB, version is still displayed as None."
-    [[ ! -z $(refstack-manage --config-file $CFG_FILE version | grep -i none) ]] && PrintError $msg
+    [[ ! -z $(refstack-manage --config-file $cfg_file version | grep -i none) ]] && PrintError $msg
 fi
 
 echo "Generate HTML templates from docs"
-sudo -HE -u $caller_user bash -c "source .venv/bin/activate; python tools/convert-docs.py -o refstack-ui/app/components/about/templates doc/source/*.rst"
+python3 tools/convert-docs.py -o refstack-ui/app/components/about/templates doc/source/*.rst
 
 echo "Starting Refstack Server. Run daemon on refstack-svr screen session."
 echo "refstack-api --env REFSTACK_OSLO_CONFIG=etc/refstack.conf"
 # Run on deatached screen session
-sudo -HE -u $caller_user bash -c "screen -dmS refstack-svr bash -c 'source .venv/bin/activate; refstack-api --env REFSTACK_OSLO_CONFIG=etc/refstack.conf;'"
+screen -dmS refstack-screen bash -c 'sudo refstack-api --env REFSTACK_OSLO_CONFIG=etc/refstack.conf'
 
 # Cleanup _proxy from apt if added - first coincedence
 UnsetProxy $_ORIGINAL_PROXY
