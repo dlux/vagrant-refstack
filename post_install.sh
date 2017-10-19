@@ -47,7 +47,7 @@ while [[ ${1} ]]; do
         --help|-h)
             PrintHelp "Install refstack server " $(basename "$0") \
                       "     --password | -p   Password to be used on the DB.
-     --virtual  | -v   Refstack server will be installed on a venv vs system wide."
+    --virtual  | -v   Refstack server will be installed on a venv vs system wide."
             ;;
         *)
             HandleOptions "$@"
@@ -93,6 +93,9 @@ pushd $REF_CLIENT
 chown -R $_CALLER_USER $REF_CLIENT
 popd
 
+# ================================== Install nginx for SSL ===================
+InstallNginx
+
 # ================================== Install Refstack ========================
 echo "INSTALLING REFSTACK SERVER: API AND UI"
 [[ ! -d "$_DEST_PATH" ]] && git clone ${_OREPO}/refstack $_DEST_PATH
@@ -130,12 +133,10 @@ connection = mysql+pymysql://refstack:${_PASSWORD}@localhost/refstack
 EOF
 
 # DB SYNC
-if [[ ! -z $(refstack-manage --config-file $cfg_file version | grep -i none) ]]; then
-    refstack-manage --config-file $cfg_file upgrade --revision head
-    # Verify upgrade actually happened
-    msg="After sync DB, version is still displayed as None."
-    [[ ! -z $(refstack-manage --config-file $cfg_file version | grep -i none) ]] && PrintError $msg
-fi
+refstack-manage --config-file $cfg_file upgrade --revision head
+# Verify upgrade actually happened
+msg="After sync DB, version is still displayed as None."
+[[ ! -z $(refstack-manage --config-file $cfg_file version | grep -i none) ]] && PrintError $msg
 
 echo "Generate HTML templates from docs"
 python3 tools/convert-docs.py -o refstack-ui/app/components/about/templates doc/source/*.rst

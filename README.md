@@ -38,9 +38,10 @@ firewalld service:
 
 This can be verified by running `# firewall-cmd --list-all`
 
-Current project shell scripts are tested with TravisCI[4]
+Current project shell scripts are tested with [TravisCI][4]
 
 [1]: https://docs.openstack.org/refstack/latest/README.html
 [2]: https://www.vagrantup.com/downloads.html
 [3]: https://www.virtualbox.org/wiki/Downloads
 [4]: https://docs.travis-ci.com/user/getting-started/
+
