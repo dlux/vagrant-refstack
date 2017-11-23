@@ -13,13 +13,10 @@ set -o xtrace
 #=================================================
 # GLOBAL DEFINITION
 #=================================================
-source common_functions
-
 _PASSWORD='secure123'
 _DEST_PATH='/opt/refstack'
 _DREPO='https://raw.githubusercontent.com/dlux/InstallScripts/master'
 _OREPO='http://git.openstack.org/openstack'
-_PORT='8000'
 _PROTOCOL='http'
 _VIRTUAL_ENV=False
 
@@ -28,6 +25,11 @@ _CALLER_USER=${_CALLER_USER:-'ubuntu'}
 #_FQDN="$(hostname)"
 #[[ -n "$(hostname -d)" ]] && _FQDN="${_FQDN}.$(hostname -d)"
 _FQDN=localhost
+
+[[ ! -f common_functions ]] && curl -O "${_DREPO}"/common_functions
+[[ ! -f common_packages ]] && curl -O "${_DREPO}"/common_packages
+
+source common_packages
 
 # ======================= Processes installation options =====================
 while [[ ${1} ]]; do
@@ -38,13 +40,9 @@ while [[ ${1} ]]; do
             ;;
         --ssl|-s)
             _PROTOCOL='https'
-            echo 'ssl under development'
-            exit 0
             ;;
         --virtual|-v)
             _VIRTUAL_ENV=True
-            echo 'virtualenv installation under development'
-            exit 0
             ;;
         --help|-h)
             PrintHelp "Install refstack server " $(basename "$0") \
@@ -68,9 +66,6 @@ umask 022
 
 # If proxy passed as parameter - set it on the VENV
 [[ -n $_PROXY ]] && source ".PROXY"
-
-[[ ! -f common_packages ]] && curl -O "${_DREPO}"/common_packages
-source common_packages
 
 [[ ! -f install_devtools.sh ]] && curl -O ${_DREPO}/install_devtools.sh; chmod +x install_devtools.sh;
 [[ -z _ORIGINAL_PROXY ]] && ./install_devtools.sh || ./install_devtools.sh -x $_ORIGINAL_PROXY
@@ -115,7 +110,7 @@ npm install
 sudo -HE -u $_CALLER_USER bash -c 'npm install'
 
 # Handle UI configuration
-echo "{\"refstackApiUrl\": \"${_PROTOCOL}://${_FQDN}:${_PORT}/v1\"}" > 'refstack-ui/app/config.json'
+echo "{\"refstackApiUrl\": \"${_PROTOCOL}://${_FQDN}:8000/v1\"}" > 'refstack-ui/app/config.json'
 
 # Handle API configuration
 cfg_file='etc/refstack.conf'
@@ -123,10 +118,10 @@ cat <<EOF > "${cfg_file}"
 [DEFAULT]
 debug = True
 verbose = True
-ui_url = ${_PROTOCOL}://${_FQDN}:${_PORT}
+ui_url = ${_PROTOCOL}://${_FQDN}:8000
 
 [api]
-api_url = ${_PROTOCOL}://${_FQDN}:${_PORT}
+api_url = ${_PROTOCOL}://${_FQDN}:8000
 app_dev_mode = True
 
 [database]
