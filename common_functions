@@ -1,0 +1,219 @@
+#!/bin/bash
+
+# ============================================================================
+# This file is meant to hold all common functions to be used across the
+# install scripts under this project
+# ============================================================================
+
+# Uncomment the following line to debug this script
+# set -o xtrace
+
+#=================================================
+# GLOBAL VARIABLES DEFINITION
+#=================================================
+_ORIGINAL_PROXY=''
+_PROXY=''
+_DOMAIN=',.intel.com'
+_PACKAGE_MANAGER='apt'
+#=================================================
+# GLOBAL FUNCTIONS
+#=================================================
+
+function AddUser {
+    adduser --disabled-password --gecos "" "${1}"
+    echo "${1}:${2}" | chpasswd
+    usermod -aG sudo "${1}"
+    echo "${1} ALL=(root)NOPASSWD:ALL" | EDITOR='tee -a' visudo
+    echo "Added user ${1}. Belogs to sudoers group".
+}
+
+function PrintError {
+    echo "************************" >&2
+    echo "* $(date +"%F %T.%N") ERROR: $1" >&2
+    echo "************************" >&2
+    exit 1
+}
+
+function EnsureNonRoot {
+    # Ensure script is run as root
+    if [ "$EUID" -eq "0" ]; then
+        PrintError "This script must be run as NON root."
+    fi
+}
+
+function EnsureRoot {
+    # Ensure script is run as root
+    if [ "$EUID" -ne "0" ]; then
+        PrintError "This script must be run as root."
+    fi
+}
+
+function HandleOptions {
+    case "${1}" in
+        --domain|-d)
+            SetDomain "${2}"
+            ;;
+        --proxy|-x)
+            SetProxy "${2}"
+            ;;
+        --help|-h)
+            PrintHelp
+            ;;
+        *)
+            PrintError "Invalid Argument."
+    esac
+    shift
+}
+
+function IsUbuntu {
+    # Return True or False
+    distro=$(lsb_release -is)
+    [[ $distro == 'Ubuntu' ]] && echo True || echo False
+}
+
+function IsTrusty {
+    # Return True or False
+    [[ $(IsUbuntu) == True && $(lsb_release -cs) == 'trusty' ]] && echo True || echo False
+}
+
+function IsXenial {
+    # Return True or False
+    [[ $(IsUbuntu) == True && $(lsb_release -cs) == 'xenial' ]] && echo True || echo False
+}
+
+function PrintHelp {
+    echo " "
+    echo "Script: $1. Optionally uses given proxy"
+    echo " "
+    echo "Usage:"
+    echo "./$2 [--proxy | -x <http://proxyserver:port>]"
+    echo " "
+    if [[ ! -z $3 ]]; then echo "$3"; fi
+    echo "     --domain | -d     Uses the given domain when needed."
+    echo "     --proxy  | -x     Uses the given proxy server in the installation."
+    echo "     --help            Prints current help text. "
+    echo " "
+    exit 1
+}
+
+function GetRandomNumber {
+    _RANDOM_NUMBER=$(awk -v min=500 -v max=10000 'BEGIN{srand(); print int(min+rand()*(max-min+1))}')
+}
+
+function SetDomain {
+    if [[ -z "${1}" || "${1}" == -* ]]; then
+          PrintError "Function set_domain - Missing domain data."
+    else
+        _DOMAIN=",${1}"
+    fi
+}
+
+function SetLocale {
+    # Set locale
+    locale-gen en_US
+    update-locale
+    export HOME=$1
+}
+
+function SetPackageManager {
+# Discover os_family and set package manager
+# accordingly [apt | yum]
+# optionally pass manager as parameter
+    distro="${1:-$(lsb_release -is)}"
+
+    case "${distro}" in
+        RedHat|yum)
+            _PACKAGE_MANAGER='yum'
+            ;;
+        *)
+            _PACKAGE_MANAGER='apt'
+    esac
+}
+
+function SetProxyOnaptConf {
+    if [ -f /etc/apt/apt.conf ]; then
+        echo "Acquire::http::Proxy \"${1}\";" >>  /etc/apt/apt.conf
+    elif [ -d /etc/apt/apt.conf.d ]; then
+        echo "Acquire::http::Proxy \"${1}\";" >>  /etc/apt/apt.conf.d/70proxy.conf
+    fi
+}
+
+function SetProxyOnFile {
+    echo " $_PROXY" | sed "s/ /\nexport /g" > .PROXY
+}
+
+function SetProxy {
+    if [[ -z "${1}" || "${1}" == -* ]]; then
+        PrintError "Function set_proxy - Missing proxy data."
+    fi
+
+    SetPackageManager
+    SetProxyOn"${_PACKAGE_MANAGER}"Conf "$@"
+
+    _ORIGINAL_PROXY="${1}"
+    npx="127.0.0.0/8,localhost,10.0.0.0/8,192.168.0.0/16${_DOMAIN}"
+    _PROXY="http_proxy=${1} https_proxy=${1} no_proxy=${npx}"
+    _PROXY="$_PROXY HTTP_PROXY=${1} HTTPS_PROXY=${1} NO_PROXY=${npx}"
+
+    SetProxyOnFile
+}
+
+function UnsetProxyOnaptConf {
+    # Cleanup proxy from apt. If any, remove the first coincedence
+    if [[ ! -z "${1}" ]]; then
+        scaped_str=$(echo $1 | sed -s 's/[\/&]/\\&/g')
+        if [ -f /etc/apt/apt.conf ]; then
+            sudo sed -i "0,/$scaped_str/{/$scaped_str/d;}" /etc/apt/apt.conf
+        elif [ -d /etc/apt/apt.conf.d ]; then
+            sudo sed -i "0,/$scaped_str/{/$scaped_str/d;}" /etc/apt/apt.conf.d/70proxy.conf
+        fi
+    fi
+}
+
+function UnsetProxy {
+    UnsetProxyOn"${_PACKAGE_MANAGER}"Conf "$@"
+}
+
+function UserExist {
+    [[ -n $(compgen -u | grep -i "${1}") ]] && echo True || echo False
+}
+
+function ValidIP {
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+
+    echo $stat
+}
+
+function wait_for_ping {
+    ip=$1
+    timeout=${2:-360}
+    initial_time=$(date +%s)
+    elapsed_time=$timeout
+
+    while [ "$elapsed_time" -le "$timeout" ]; do
+        ping -q -c 1 ${ip}
+
+        rc=$?
+        if [[ $rc -eq  1 ]]; then
+            echo "Ping is replying now"
+            break
+        fi
+        sleep 1
+        current_time=$(date +%s)
+        elapsed_time=$((current_time-initial_time))
+    done
+
+    return $rc
+}
+
