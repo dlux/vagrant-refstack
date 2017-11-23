@@ -13,10 +13,12 @@ set -o xtrace
 #=================================================
 # GLOBAL DEFINITION
 #=================================================
-_PASSWORD='secure123'
+
 _DEST_PATH='/opt/refstack'
 _DREPO='https://raw.githubusercontent.com/dlux/InstallScripts/master'
 _OREPO='http://git.openstack.org/openstack'
+_PASSWORD='secure123'
+_PORT='8000'
 _PROTOCOL='http'
 _VIRTUAL_ENV=False
 
@@ -64,13 +66,10 @@ umask 022
 # If proxy is set on the env - expand it
 [[ -n $http_proxy ]] && SetProxy $http_proxy
 
-# If proxy passed as parameter - set it on the VENV
-[[ -n $_PROXY ]] && source ".PROXY"
-
 [[ ! -f install_devtools.sh ]] && curl -O ${_DREPO}/install_devtools.sh; chmod +x install_devtools.sh;
-[[ -z _ORIGINAL_PROXY ]] && ./install_devtools.sh || ./install_devtools.sh -x $_ORIGINAL_PROXY
+./install_devtools.sh
 
-InstallNodejs '8'
+InstallNodejs '6'
 
 # ================================== Setup Database ==========================
 InstallMysql "${_PASSWORD}"
@@ -110,7 +109,7 @@ npm install
 sudo -HE -u $_CALLER_USER bash -c 'npm install'
 
 # Handle UI configuration
-echo "{\"refstackApiUrl\": \"${_PROTOCOL}://${_FQDN}:8000/v1\"}" > 'refstack-ui/app/config.json'
+echo "{\"refstackApiUrl\": \"${_PROTOCOL}://${_FQDN}:${_PORT}/v1\"}" > 'refstack-ui/app/config.json'
 
 # Handle API configuration
 cfg_file='etc/refstack.conf'
@@ -118,10 +117,10 @@ cat <<EOF > "${cfg_file}"
 [DEFAULT]
 debug = True
 verbose = True
-ui_url = ${_PROTOCOL}://${_FQDN}:8000
+ui_url = ${_PROTOCOL}://${_FQDN}:${_PORT}
 
 [api]
-api_url = ${_PROTOCOL}://${_FQDN}:8000
+api_url = ${_PROTOCOL}://${_FQDN}:${_PORT}
 app_dev_mode = True
 
 [database]
