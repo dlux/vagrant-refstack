@@ -42,9 +42,11 @@ while [[ ${1} ]]; do
             ;;
         --ssl|-s)
             _PROTOCOL='https'
+            PrintError "ssl under development"
             ;;
         --virtual|-v)
             _VIRTUAL_ENV=True
+            PrintError "Install on venv under development"
             ;;
         --help|-h)
             PrintHelp "Install refstack server " $(basename "$0") \
@@ -88,24 +90,23 @@ echo "INSTALLING REFSTACK CLIENT"
 REF_CLIENT="${_DEST_PATH}-client"
 [[ ! -d "$REF_CLIENT" ]] && git clone ${_OREPO}/refstack-client $REF_CLIENT
 pushd $REF_CLIENT
-./setup_env -p3
+./setup_env
 chown -R $_CALLER_USER $REF_CLIENT
 popd
 
 # ================================== Install nginx for SSL ===================
-InstallNginx
+# InstallNginx
 
 # ================================== Install Refstack ========================
 echo "INSTALLING REFSTACK SERVER: API AND UI"
 [[ ! -d "$_DEST_PATH" ]] && git clone ${_OREPO}/refstack $_DEST_PATH
 pushd $_DEST_PATH
 
-pip install ./ pymysql
-
 [[ $_PROTOCOL -eq 'http' ]] && pip install gunicorn
+pip install .
+pip install pymysql
 
 npm install
-
 sudo -HE -u $_CALLER_USER bash -c 'npm install'
 
 # Handle UI configuration
@@ -138,7 +139,7 @@ msg="After sync DB, version is still displayed as None."
 [[ ! -z $(refstack-manage --config-file $cfg_file version | grep -i none) ]] && PrintError $msg
 
 echo "Generate HTML templates from docs"
-python3 tools/convert-docs.py -o refstack-ui/app/components/about/templates doc/source/*.rst
+python tools/convert-docs.py -o refstack-ui/app/components/about/templates doc/source/*.rst
 
 echo "Starting Refstack Server. Run daemon on refstack-svr screen session."
 echo "refstack-api --env REFSTACK_OSLO_CONFIG=etc/refstack.conf"
