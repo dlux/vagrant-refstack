@@ -21,6 +21,7 @@ _PASSWORD='secure123'
 _PORT='8000'
 _PROTOCOL='http'
 _VIRTUAL_ENV=False
+_CLIENT=False
 
 _CALLER_USER=$(who -m | awk '{print $1;}')
 _CALLER_USER=${_CALLER_USER:-'ubuntu'}
@@ -36,6 +37,9 @@ source common_packages
 # ======================= Processes installation options =====================
 while [[ ${1} ]]; do
     case "${1}" in
+        --client|-c)
+            _CLIENT=True
+            ;;
         --password|-p)
             [[ -z "${2}" || "${2}" == -* ]] && PrintError "Missing password." || _PASSWORD="${2}"
             shift
@@ -50,7 +54,8 @@ while [[ ${1} ]]; do
             ;;
         --help|-h)
             PrintHelp "Install refstack server " $(basename "$0") \
-                      "     --password | -p   Password to be used on the DB.
+                      "    --client | -c   Install refstack client. Deafault is False.
+    --password | -p   Password to be used on the DB.
     --virtual  | -v   Refstack server will be installed on a venv vs system wide."
             ;;
         *)
@@ -86,14 +91,15 @@ FLUSH PRIVILEGES;
 MYSQL_SCRIPT
 
 # ================================== Install Refstack Client =================
-echo "INSTALLING REFSTACK CLIENT"
-REF_CLIENT="${_DEST_PATH}-client"
-[[ ! -d "$REF_CLIENT" ]] && git clone ${_OREPO}/refstack-client $REF_CLIENT
-pushd $REF_CLIENT
-./setup_env
-chown -R $_CALLER_USER $REF_CLIENT
-popd
-
+if [ _CLIENT == True ]; then
+    echo "INSTALLING REFSTACK CLIENT"
+    REF_CLIENT="${_DEST_PATH}-client"
+    [[ ! -d "$REF_CLIENT" ]] && git clone ${_OREPO}/refstack-client $REF_CLIENT
+    pushd $REF_CLIENT
+    ./setup_env
+    chown -R $_CALLER_USER $REF_CLIENT
+    popd
+fi
 # ================================== Install nginx for SSL ===================
 # InstallNginx
 
