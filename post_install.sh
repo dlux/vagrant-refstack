@@ -124,8 +124,8 @@ pushd $_DEST_PATH
 pip install .
 
 # Temporal fixing yarn v1.13.0
-if [[ -n $(cat /usr/share/yarn/package.json | grep version | grep 1.13.0) ]];
-then
+yarn_version=$(cat /usr/share/yarn/package.json | grep version)
+if [[ -n $(echo $yarn_version | grep 1.13.0) ]]; then
     curl -sL https://deb.nodesource.com/setup_10.x | bash -
     apt-get install -y nodejs
 fi
