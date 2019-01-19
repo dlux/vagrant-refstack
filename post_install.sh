@@ -6,7 +6,7 @@
 # ============================================================================
 
 # Comment the following line to stop debugging this script
-set -o xtrace
+# set -o xtrace
 # Comment the following like to stop script on failure (Fail fast)
 # set -e
 
@@ -29,8 +29,11 @@ _CALLER_USER=${_CALLER_USER:-'ubuntu'}
 #[[ -n "$(hostname -d)" ]] && _FQDN="${_FQDN}.$(hostname -d)"
 _FQDN=localhost
 
-[[ ! -f common_functions ]] && curl -O "${_DREPO}"/common_functions
-[[ ! -f common_packages ]] && curl -O "${_DREPO}"/common_packages
+if [[ ! -f common_functions || ! -f common_packages ]]; then
+    [[ -n $http_proxy ]] && pxt="-x $http_proxy" || pxt=''
+    curl $pxt -O "${_DREPO}"/common_functions
+    curl $pxt -O "${_DREPO}"/common_packages
+fi
 
 source common_packages
 
@@ -73,10 +76,14 @@ umask 022
 # If proxy is set on the env - expand it
 [[ -n $http_proxy ]] && SetProxy $http_proxy
 
-[[ ! -f install_devtools.sh ]] && curl -O ${_DREPO}/install_devtools.sh; chmod +x install_devtools.sh;
+[[ ! -f install_devtools.sh ]] && curl -O ${_DREPO}/install_devtools.sh
+chmod +x install_devtools.sh
 ./install_devtools.sh
 
-InstallNodejs '6'
+# Install yarn
+curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+sudo apt-get -y update && sudo apt-get -y install yarn
 
 # ================================== Setup Database ==========================
 InstallMysql "${_PASSWORD}"
@@ -104,21 +111,31 @@ fi
 # InstallNginx
 
 # ================================== Install Refstack ========================
+#[[ $_PROTOCOL -eq 'http' ]] && pip install gunicorn==18
+
+pip install gunicorn==18
+pip install pymysql>=0.6.2,!=0.6.4
+pip install alembic>=0.9.6
+
 echo "INSTALLING REFSTACK SERVER: API AND UI"
 [[ ! -d "$_DEST_PATH" ]] && git clone ${_OREPO}/refstack $_DEST_PATH
 pushd $_DEST_PATH
 
-[[ $_PROTOCOL -eq 'http' ]] && pip install gunicorn
 pip install .
-pip install pymysql
 
-npm install
-sudo -HE -u $_CALLER_USER bash -c 'npm install'
+# Temporal fixing yarn v1.13.0
+if [[ -n $(cat /usr/share/yarn/package.json | grep version | grep 1.13.0) ]];
+then
+    curl -sL https://deb.nodesource.com/setup_10.x | bash -
+    apt-get install -y nodejs
+fi
 
-# Handle UI configuration
+yarn
+
+echo 'Creating UI configuration'
 echo "{\"refstackApiUrl\": \"${_PROTOCOL}://${_FQDN}:${_PORT}/v1\"}" > 'refstack-ui/app/config.json'
 
-# Handle API configuration
+echo 'Creating API configuration'
 cfg_file='etc/refstack.conf'
 cat <<EOF > "${cfg_file}"
 [DEFAULT]
@@ -156,3 +173,5 @@ screen -dmS refstack-screen bash -c 'sudo refstack-api --env REFSTACK_OSLO_CONFI
 UnsetProxy $_ORIGINAL_PROXY
 popd
 echo "Finished Installation Script"
+echo "Open browser on localhost:8000"
+
