@@ -1,7 +1,7 @@
 Refstack Server
 ================
 
-[![Build Status](https://api.travis-ci.org/dlux/vagrant-refstack.svg?branch=master "Build Status @ Travis ")](https://travis-ci.org/dlux/vagrant-refstack)
+[![Build Status](https://api.travis-ci.com/dlux/vagrant-refstack.svg?branch=master "Build Status @ Travis ")](https://travis-ci.com/dlux/vagrant-refstack)
 
 This vagrant project is to install refstack server for development purposes.
 For additional options such as deploying RefStack on a docker containers,
